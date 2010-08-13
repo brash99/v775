@@ -574,7 +574,7 @@ c775ReadBlock(int id, volatile UINT32 *data, int nwrds)
 {
 
   int retVal, xferCount;
-  UINT32 trailer, evID;
+  UINT32 vmeAdr, trailer, evID;
   UINT16 stat = 0;
 
   if((id<0) || (c775p[id] == NULL)) {
