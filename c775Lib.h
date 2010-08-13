@@ -150,16 +150,17 @@ struct c775_ROM_struct {
 
 /* Macros */
 #define C775_EXEC_SOFT_RESET(id) {					\
-    c775p[id]->bitSet1 = C775_SOFT_RESET;				\
-    c775p[id]->bitClear1 = C775_SOFT_RESET;}
+    c775Write(&c775p[id]->bitSet1, C775_SOFT_RESET);			\
+    c775Write(&c775p[id]->bitClear1, C775_SOFT_RESET);}
 
 #define C775_EXEC_DATA_RESET(id) {					\
-    c775p[id]->bitSet2 = C775_DATA_RESET;				\
-    c775p[id]->bitClear2 = C775_DATA_RESET;}
+    c775Write(&c775p[id]->bitSet2, C775_DATA_RESET);			\
+    c775Write(&c775p[id]->bitClear2, C775_DATA_RESET);}
 
 #define C775_EXEC_READ_EVENT_COUNT(id) {				\
     volatile unsigned short s1, s2;					\
-    s1 = c775p[id]->evCountL; s2 = c775p[id]->evCountH;			\
+    s1 = c775Read(&c775p[id]->evCountL);				\
+    s2 = c775Read(&c775p[id]->evCountH);				\
     c775EventCount[id] = (c775EventCount[id]&0xff000000) +		\
       (s2<<16) +							\
       (s1);}
@@ -170,15 +171,15 @@ struct c775_ROM_struct {
       c775EvtReadCnt[id] = (c775EvtReadCnt[id]&0x7f000000) + val;}
 
 #define C775_EXEC_CLR_EVENT_COUNT(id) {		\
-    c775p[id]->evCountReset = 1;		\
+    c775Write(&c775p[id]->evCountReset, 1);	\
     c775EventCount[id] = 0;}
 #define C775_EXEC_INCR_EVENT(id) {			\
-    c775p[id]->incrEvent = 1;				\
+    c775Write(&c775p[id]->incrEvent, 1);		\
     c775EvtReadCnt[id]++;}
 #define C775_EXEC_INCR_WORD(id) {		\
-    c775p[id]->incrOffset = 1;}
+    c775Write(&c775p[id]->incrOffset, 1);}
 #define C775_EXEC_GATE(id) {			\
-    c775p[id]->swComm = 1;}
+    c775Write(&c775p[id]->swComm, 1);}
 
 /* Function Prototypes */
 STATUS c775Init (UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID);

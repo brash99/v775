@@ -404,7 +404,7 @@ c775PrintEvent(int id, int pflag)
 *
 * RETURNS: Number of Data words read from the TDC (including Header/Trailer).
 */
-// FIXME MAKE SURE ENDIANESS IS RIGHT FOR DATA
+
 int
 c775ReadEvent(int id, UINT32 *data)
 {
@@ -429,12 +429,18 @@ c775ReadEvent(int id, UINT32 *data)
     dCnt = 0;
     /* Read Header - Get Word count */
     header = c775pl[id]->data[dCnt];
+#ifndef VXWORKS
+    header = LSWAP(header);
+#endif
     if((header&C775_DATA_ID_MASK) != C775_HEADER_DATA) {
       logMsg("c775ReadEvent: ERROR: Invalid Header Word 0x%08x\n",header,0,0,0,0,0);
       C775UNLOCK;
       return(-1);
     }else{
       nWords = (header&C775_WORDCOUNT_MASK)>>8;
+#ifndef VXWORKS
+      header = LSWAP(header);
+#endif
       data[dCnt] = header;
       dCnt++;
     }
@@ -444,12 +450,18 @@ c775ReadEvent(int id, UINT32 *data)
     dCnt += ii;
 
     trailer = c775pl[id]->data[dCnt];
+#ifndef VXWORKS
+    trailer = LSWAP(trailer);
+#endif
     if((trailer&C775_DATA_ID_MASK) != C775_TRAILER_DATA) {
       logMsg("c775ReadEvent: ERROR: Invalid Trailer Word 0x%08x\n",trailer,0,0,0,0,0);
       C775UNLOCK;
       return(-1);
     }else{
       evID = trailer&C775_EVENTCOUNT_MASK;
+#ifndef VXWORKS
+      trailer = LSWAP(trailer);
+#endif
       data[dCnt] = trailer;
       dCnt++;
     }
@@ -471,7 +483,7 @@ c775ReadEvent(int id, UINT32 *data)
 *
 * RETURNS: Number of Data words read from the TDC.
 */
-// FIXME ENDIANESS
+
 int
 c775FlushEvent(int id, int fflag)
 {
@@ -500,6 +512,9 @@ c775FlushEvent(int id, int fflag)
     
     while (!done) {
       tmpData = c775pl[id]->data[dCnt];
+#ifndef VXWORKS
+      tmpData = LSWAP(tmpData);
+#endif
       switch (tmpData&C775_DATA_ID_MASK) {
       case C775_HEADER_DATA:
 	if(fflag > 0) logMsg("c775FlushEvent: Found Header 0x%08x\n",tmpData,0,0,0,0,0);
@@ -559,7 +574,7 @@ c775ReadBlock(int id, volatile UINT32 *data, int nwrds)
 {
 
   int retVal, xferCount;
-  UINT32 evID;
+  UINT32 trailer, evID;
   UINT16 stat = 0;
 
   if((id<0) || (c775p[id] == NULL)) {
@@ -581,10 +596,22 @@ c775ReadBlock(int id, volatile UINT32 *data, int nwrds)
   /* Wait until Done or Error */
   retVal = sysVmeDmaDone(1000,1);
 
-#else
+#elif defined(VXWORKS86K51)
  
   /* 68K Block 32 transfer from FIFO using VME2Chip */
   retVal = mvme_dma((long)data, 1, (long)(c775pl[id]->data), 0, nwrds, 1);
+
+#else
+  /* Linux readout with jvme library */
+  vmeAdr = (UINT32)(c775p[id]->data) - c775MemOffset;
+  retVal = vmeDmaSend((UINT32)data, vmeAdr, (nwrds<<2));
+  if(retVal < 0) {
+    logMsg("c775ReadBlock: ERROR in DMA transfer Initialization 0x%x\n",retVal,0,0,0,0,0);
+    C775UNLOCK;
+    return(ERROR);
+  }
+  /* Wait until Done or Error */
+  retVal = vmeDmaDone();
 
 #endif
 
@@ -594,14 +621,22 @@ c775ReadBlock(int id, volatile UINT32 *data, int nwrds)
     if((retVal>0) && (stat)) {
       c775Write(&c775p[id]->bitClear1, C775_VME_BUS_ERROR);
       logMsg("c775ReadBlock: INFO: DMA terminated by TDC(BUS Error) - Transfer OK\n",0,0,0,0,0,0);
+#ifdef VXWORKS
       xferCount = (nwrds - (retVal>>2));  /* Number of Longwords transfered */
-      if ((data[xferCount-1]&C775_DATA_ID_MASK) == C775_TRAILER_DATA) {
-	evID = data[xferCount-1]&C775_EVENTCOUNT_MASK;
+#else
+      xferCount = (retVal>>2);  /* Number of Longwords transfered */
+#endif
+      trailer = data[xferCount-1];
+#ifndef VXWORKS
+      trailer = LSWAP(trailer);
+#endif
+      if ((trailer&C775_DATA_ID_MASK) == C775_TRAILER_DATA) {
+	evID = trailer&C775_EVENTCOUNT_MASK;
 	C775_EXEC_SET_EVTREADCNT(id,evID);
 	C775UNLOCK;
 	return(xferCount); /* Return number of data words transfered */
       } else {
-	logMsg("c775ReadBlock: ERROR: Invalid Trailer data 0x%x\n",data[xferCount-1],0,0,0,0,0);
+	logMsg("c775ReadBlock: ERROR: Invalid Trailer data 0x%x\n",trailer,0,0,0,0,0);
 	C775UNLOCK;
 	return(xferCount);
       }
@@ -636,9 +671,15 @@ c775Int (void)
   UINT32 nevt=0;
   
   /* Disable interrupts */
+#ifdef VXWORKS
   sysIntDisable(c775IntLevel);
+#endif
 
   c775IntCount++;
+
+#ifndef VXWORKS
+  vmeBusLock();
+#endif
  
   if (c775IntRoutine != NULL)  {     /* call user routine */
     (*c775IntRoutine) (c775IntArg);
@@ -652,9 +693,13 @@ c775Int (void)
        or until the Data buffer is empty. The later case would
        indicate a possible error. In either case the data is
        effectively thrown away */
+    C775LOCK;
     nevt = c775Read(&c775p[c775IntID]->evTrigger)&C775_EVTRIGGER_MASK;
+    C775UNLOCK;
     while ( (ii<nevt) && (c775Dready(c775IntID) > 0) ) {
+      C775LOCK;
       C775_EXEC_INCR_EVENT(c775IntID);
+      C775UNLOCK;
       ii++;
     }
     if(ii<nevt)
@@ -665,7 +710,12 @@ c775Int (void)
   }
 
   /* Enable interrupts */
+#ifdef VXWORKS
   sysIntEnable(c775IntLevel);
+#else
+  vmeBusUnlock();
+#endif
+ 
 
 }
 
@@ -720,10 +770,23 @@ c775IntConnect (VOIDFUNCPTR routine, int arg, UINT16 level, UINT16 vector)
     return(ERROR);
   }
 #endif
+#ifdef VXWORKS
   if((intConnect(INUM_TO_IVEC(c775IntVec),c775Int,0)) != 0) {
     printf("c775IntConnect: ERROR in intConnect()\n");
     return(ERROR);
   }
+#else
+  if(vmeIntDisconnect(c775IntLevel) != 0)
+    {
+      printf("c775IntConnect: ERROR disconnecting Interrupt\n");
+      return(ERROR);
+    }
+  if(vmeIntConnect(c775IntVec,c775IntLevel,c775Int,0) != 0)
+    {
+      printf("c775IntConnect: ERROR in intConnect()\n");
+      return(ERROR);
+    }
+#endif
 
   return (OK);
 }
