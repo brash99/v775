@@ -254,7 +254,7 @@ c775Status( int id, int reg, int sflag)
 {
 
   int DRdy=0, BufFull=0;
-  UINT16 stat1, stat2, bit1, bit2, cntl1;
+  UINT16 stat1, stat2, bit1, bit2, cntl1, rev;
   UINT16 iLvl, iVec, evTrig;
   UINT16 fsr;    
 
@@ -266,6 +266,7 @@ c775Status( int id, int reg, int sflag)
 
   /* read various registers */
   C775LOCK;
+  rev   = c775Read(&c775p[id]->rev);
   stat1 = c775Read(&c775p[id]->status1)&C775_STATUS1_MASK;
   stat2 = c775Read(&c775p[id]->status2)&C775_STATUS2_MASK;
   bit1 =  c775Read(&c775p[id]->bitSet1)&C775_BITSET1_MASK;
@@ -290,6 +291,7 @@ c775Status( int id, int reg, int sflag)
 	 (UINT32) c775p[id] - c775MemOffset,(UINT32) c775p[id]);
 #endif
   printf("---------------------------------------------- \n");
+  printf(" Firmware Revision = %d.%d\n",rev>>8,rev&0xff);
 
   if( (iLvl>0) && (evTrig>0)) {
     printf(" Interrupts Enabled - Every %d events\n",evTrig);
@@ -620,7 +622,7 @@ c775ReadBlock(int id, volatile UINT32 *data, int nwrds)
     stat = c775Read(&c775p[id]->bitSet1)&C775_VME_BUS_ERROR;
     if((retVal>0) && (stat)) {
       c775Write(&c775p[id]->bitClear1, C775_VME_BUS_ERROR);
-      logMsg("c775ReadBlock: INFO: DMA terminated by TDC(BUS Error) - Transfer OK\n",0,0,0,0,0,0);
+/*       logMsg("c775ReadBlock: INFO: DMA terminated by TDC(BUS Error) - Transfer OK\n",0,0,0,0,0,0); */
 #ifdef VXWORKS
       xferCount = (nwrds - (retVal>>2));  /* Number of Longwords transfered */
 #else
@@ -636,9 +638,20 @@ c775ReadBlock(int id, volatile UINT32 *data, int nwrds)
 	C775UNLOCK;
 	return(xferCount); /* Return number of data words transfered */
       } else {
-	logMsg("c775ReadBlock: ERROR: Invalid Trailer data 0x%x\n",trailer,0,0,0,0,0);
-	C775UNLOCK;
-	return(xferCount);
+	trailer = data[xferCount-2];
+#ifndef VXWORKS
+	trailer = LSWAP(trailer);
+#endif
+	if ((trailer&C775_DATA_ID_MASK) == C775_TRAILER_DATA) {
+	  evID = trailer&C775_EVENTCOUNT_MASK;
+	  C775_EXEC_SET_EVTREADCNT(id,evID);
+	  C775UNLOCK;
+	  return(xferCount-1); /* Return number of data words transfered */
+	} else {
+	  logMsg("c775ReadBlock: ERROR: Invalid Trailer data 0x%x\n",trailer,0,0,0,0,0);
+	  C775UNLOCK;
+	  return(xferCount);
+	}
       }
     } else {
       logMsg("c775ReadBlock: ERROR in DMA transfer 0x%x\n",retVal,0,0,0,0,0);
@@ -646,7 +659,7 @@ c775ReadBlock(int id, volatile UINT32 *data, int nwrds)
       return(retVal);
     }
   }
-
+  
   C775UNLOCK;
   return(OK);
 
@@ -1101,6 +1114,8 @@ c775BitClear2(int id, UINT16 val)
 *
 * c775ClearThresh  - Zero TDC thresholds for all channels
 * c775Gate         - Issue Software Gate to TDC
+* c775EnableBerr   - Enable Bus Error termination of block reads
+* c775DisableBerr  - Disable Bus Error termination of block reads
 * c775IncrEventBlk - Increment Event counter for Block reads
 * c775IncrEvent    - Increment Read pointer to next event in the Buffer
 * c775IncrWord     - Increment Read pointer to next word in the event
@@ -1141,6 +1156,33 @@ c775Gate(int id)
   }
   C775LOCK;
   C775_EXEC_GATE(id);
+  C775UNLOCK;
+}
+
+void
+c775EnableBerr(int id)
+{
+  if((id<0) || (c775p[id] == NULL)) {
+    logMsg("%s: ERROR : QDC id %d not initialized \n",__FUNCTION__,id,0,0,0,0);
+    return;
+  }
+
+  C775LOCK;
+  c775Write(&c775p[id]->control1, C775_BERR_ENABLE);/*  | C775_BLK_END); */
+  C775UNLOCK;
+}
+
+void
+c775DisableBerr(int id)
+{
+  if((id<0) || (c775p[id] == NULL)) {
+    logMsg("%s: ERROR : QDC id %d not initialized \n",__FUNCTION__,id,0,0,0,0);
+    return;
+  }
+
+  C775LOCK;
+  c775Write(&c775p[id]->control1, 
+	    c775Read(&c775p[id]->control1) & ~(C775_BERR_ENABLE | C775_BLK_END));
   C775UNLOCK;
 }
 

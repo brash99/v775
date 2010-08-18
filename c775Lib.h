@@ -109,6 +109,10 @@ struct c775_ROM_struct {
 #define C775_DATA_READY    0x1
 #define C775_BUSY          0x4
 
+#define C775_BLK_END       0x04
+#define C775_BERR_ENABLE   0x20
+#define C775_ALIGN64       0x40
+
 #define C775_MEM_TEST            0x1
 #define C775_OFFLINE             0x2
 #define C775_OVERFLOW_SUP        0x8
@@ -134,7 +138,7 @@ struct c775_ROM_struct {
 #define C775_INTLEVEL_MASK  0x0007
 #define C775_INTVECTOR_MASK 0x00ff
 #define C775_STATUS1_MASK   0x01ff
-#define C775_CONTROL1_MASK  0x0034
+#define C775_CONTROL1_MASK  0x0074
 #define C775_STATUS2_MASK   0x00f6
 #define C775_BITSET2_MASK   0x7fff
 #define C775_EVTRIGGER_MASK 0x001f
