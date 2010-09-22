@@ -20,10 +20,10 @@ VMEROL			= c775_linux_list.so
 ROLLIBS			= -lc775
 
 ifndef LINUXVME_LIB
-	LINUXVME_LIB	= $CODA/extensions/gefanuc/libs
+	LINUXVME_LIB	= $CODA/extensions/linuxvme/libs
 endif
 ifndef LINUXVME_INC
-	LINUXVME_INC	= $CODA/extensions/gefanuc/include
+	LINUXVME_INC	= $CODA/extensions/linuxvme/include
 endif
 
 # DEFs for compiling primary readout lists
