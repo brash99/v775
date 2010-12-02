@@ -598,7 +598,7 @@ c775ReadBlock(int id, volatile UINT32 *data, int nwrds)
   /* Wait until Done or Error */
   retVal = sysVmeDmaDone(1000,1);
 
-#elif defined(VXWORKS86K51)
+#elif defined(VXWORKS68K51)
  
   /* 68K Block 32 transfer from FIFO using VME2Chip */
   retVal = mvme_dma((long)data, 1, (long)(c775pl[id]->data), 0, nwrds, 1);

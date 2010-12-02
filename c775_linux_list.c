@@ -7,8 +7,8 @@
  */
 
 /* Event Buffer definitions */
-#define MAX_NUM_EVENTS    400
-#define MAX_SIZE_EVENTS   1024*10      /* Size in Bytes */
+#define MAX_EVENT_POOL     400
+#define MAX_EVENT_LENGTH   1024*10      /* Size in Bytes */
 
 /* Define Interrupt source and address */
 #define TIR_SOURCE
