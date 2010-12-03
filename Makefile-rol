@@ -6,9 +6,7 @@
 #    Makefile for the coda primary and secondary readout lists 
 #    running on a Linux controller
 #
-#
-# $Date$
-# $Rev$
+# SVN: $Rev$
 #
 # Uncomment DEBUG line for debugging info ( -g and -Wall )
 #export DEBUG=1

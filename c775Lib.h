@@ -7,6 +7,9 @@
 *  Author: David Abbott 
 *          Jefferson Lab Data Acquisition Group
 *          March 2002
+*
+*  SVN: $Rev$
+*
 */
 #ifndef __C775LIB__
 #define __C775LIB__

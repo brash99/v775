@@ -3,7 +3,9 @@
 #   This driver is specific to VxWorks BSPs and must be compiled
 #   with access to vxWorks headers.
 #
-ARCH=Linux
+# SVN: $Rev$
+#
+#ARCH=Linux
 
 #Check Operating system we are using
 ifndef OSNAME
