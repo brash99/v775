@@ -1,94 +1,142 @@
 #
-# Description:  Makefile for v775Lib.o
-#   This driver is specific to VxWorks BSPs and must be compiled
-#   with access to vxWorks headers.
+# File:
+#    Makefile
 #
-# SVN: $Rev$
+# Description:
+#    Makefile for CAEN 775 TDC software driver
 #
-#ARCH=Linux
-
-#Check Operating system we are using
-ifndef OSNAME
-  OSNAME := $(subst -,_,$(shell uname))
+#
+BASENAME=c775
+#
+# Uncomment DEBUG line, to include some debugging info ( -g and -Wall)
+DEBUG	?= 1
+QUIET	?= 1
+#
+ifeq ($(QUIET),1)
+        Q = @
+else
+        Q =
 endif
+
+# Override some bad habit of mismatching the ARCH with the OS.
+ifeq (Linux, $(findstring Linux, ${ARCH}))
+	override ARCH=$(shell uname -m)
+	OS=LINUX
+endif
+
+ifeq (VXWORKS, $(findstring VXWORKS, $(ARCH)))
+	override ARCH=PPC
+	OS=VXWORKS
+endif
+
 
 ifndef ARCH
-  ARCH = VXWORKSPPC
+	ifeq (arm, $(findstring arm, ${MACHTYPE}))
+		ARCH=armv71
+		OS=LINUX
+	else
+		ifdef LINUXVME_LIB
+			ARCH=$(shell uname -m)
+			OS=LINUX
+		else
+			ARCH=PPC
+			OS=VXWORKS
+		endif
+	endif
 endif
 
-ifeq ($(OSNAME),SunOS)
-LIBDIR = $(CODA)/$(ARCH)/lib
-endif
+# Defs and build for VxWorks
+ifeq (${OS}, VXWORKS)
+VXWORKS_ROOT		?= /site/vxworks/5.5/ppc/target
+VME_INCLUDE             ?= -I$(LINUXVME_INC)
 
-ifeq ($(ARCH),VXWORKSPPC)
-INCDIR=/site/vxworks/5.5/ppc/target/h
-CC = ccppc
-CFLAGS = -O $(DEFS)
-LD = ldppc
-DEFS = -mcpu=604 -DCPU=PPC604 -DVXWORKS -D_GNU_TOOL -DVXWORKSPPC
-INCS = -Wall -fno-for-scope -fno-builtin -fvolatile -fstrength-reduce -mlongcall -I. -I$(INCDIR)
+CC			= ccppc
+LD			= ldppc
+DEFS			= -mcpu=604 -DCPU=PPC604 -DVXWORKS -D_GNU_TOOL -mlongcall \
+				-fno-for-scope -fno-builtin -fvolatile -DVXWORKSPPC
+INCS			= -I. -I$(VXWORKS_ROOT)/h  \
+				$(VME_INCLUDE)
+CFLAGS			= $(INCS) $(DEFS)
 
-endif
+endif #OS=VXWORKS#
 
-ifeq ($(ARCH),VXWORKS68K51)
-INCDIR=/site/vxworks/5.3/68k/target/h
-CC = cc68k
-CFLAGS = -O $(DEFS)
-DEFS = -DCPU=MC68040 -DVXWORKS -DVXWORKS68K51
-INCS = -Wall -mc68020 -fvolatile -fstrength-reduce -nostdinc -I. -I$(INCDIR)
-endif
+# Defs and build for Linux
+ifeq ($(OS),LINUX)
+LINUXVME_LIB		?= ../lib
+LINUXVME_INC		?= ../include
 
-ifeq ($(ARCH),Linux)
+CC			= gcc
+ifeq ($(ARCH),i686)
+CC			+= -m32
+endif
+AR                      = ar
+RANLIB                  = ranlib
+CFLAGS			= -L. -L${LINUXVME_LIB}
+INCS			= -I. -I${LINUXVME_INC} 
 
-ifndef LINUXVME_LIB
-	LINUXVME_LIB	= $CODA/extensions/linuxvme/libs
-endif
-ifndef LINUXVME_INC
-	LINUXVME_INC	= $CODA/extensions/linuxvme/include
-endif
-CC = gcc
-AR = ar
-RANLIB = ranlib
-DEFS = -DJLAB
-INCS = -I. -I${LINUXVME_INC}
-CFLAGS = -O ${DEFS} -O2  -L. -L${LINUXVME_LIB}
+LIBS			= lib${BASENAME}.a lib${BASENAME}.so
+endif #OS=LINUX#
+
 ifdef DEBUG
-CFLAGS += -Wall -g
-endif
-
-endif
-
-ifeq ($(ARCH),Linux)
-all: echoarch libc775.a
+CFLAGS			+= -Wall -g
 else
-all: echoarch c775Lib.o v775_readout.o
+CFLAGS			+= -O2
+endif
+SRC			= caen775Lib.c
+HDRS			= c775Lib.h
+OBJ			= ${BASENAME}Lib.o
+DEPS			= $(SRC:.c=.d)
+
+ifeq ($(OS),LINUX)
+all: echoarch ${LIBS}
+else
+all: echoarch $(OBJ)
 endif
 
+%.o: %.c
+	@echo " CC     $@"
+	${Q}$(CC) $(CFLAGS) $(INCS) -c -o $@ $(SRC)
 
-c775Lib.o: caen775Lib.c c775Lib.h
-	$(CC) -c $(CFLAGS) $(INCS) -o $@ caen775Lib.c
+%.so: $(SRC)
+	@echo " CC     $@"
+	${Q}$(CC) -fpic -shared $(CFLAGS) $(INCS) -o $(@:%.a=%.so) $(SRC)
 
-libc775.a: c775Lib.o
-	$(CC) -fpic -shared $(CFLAGS) $(INCS) -o libc775.so caen775Lib.c
-	$(AR) ruv libc775.a c775Lib.o
-	$(RANLIB) libc775.a
+%.a: $(SRC)
+	@echo " AR     $@"
+	${Q}$(AR) ru $@ $<
+	@echo " RANLIB $@"
+	${Q}$(RANLIB) $@
 
-v775_readout.o: v775_readout.c c775Lib.h
-	$(CC) -c $(CFLAGS) $(INCS) -o $@ v775_readout.c
+ifeq ($(OS),LINUX)
+links: $(LIBS)
+	@echo " LN     $<"
+	${Q}ln -sf $(PWD)/$< $(LINUXVME_LIB)/$<
+	${Q}ln -sf $(PWD)/$(<:%.a=%.so) $(LINUXVME_LIB)/$(<:%.a=%.so)
+	${Q}ln -sf ${PWD}/*Lib.h $(LINUXVME_INC)
 
-links: libc775.a
-	ln -sf $(PWD)/libc775.a $(LINUXVME_LIB)/libc775.a
-	ln -sf $(PWD)/libc775.so $(LINUXVME_LIB)/libc775.so
-	ln -sf $(PWD)/c775Lib.h $(LINUXVME_INC)/c775Lib.h
+install: $(LIBS)
+	@echo " CP     $<"
+	${Q}cp $(PWD)/$< $(LINUXVME_LIB)/$<
+	@echo " CP     $(<:%.a=%.so)"
+	${Q}cp $(PWD)/$(<:%.a=%.so) $(LINUXVME_LIB)/$(<:%.a=%.so)
+	@echo " CP     ${BASENAME}Lib.h"
+	${Q}cp ${PWD}/${BASENAME}Lib.h $(LINUXVME_INC)
+
+%.d: %.c
+	@echo " DEP    $@"
+	@set -e; rm -f $@; \
+	$(CC) -MM -shared $(INCS) $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
+
+-include $(DEPS)
+
+endif
 
 clean:
-	rm -f *.o *.so *.a
+	@rm -vf ${BASENAME}Lib.{o,d} lib${BASENAME}.{a,so}
 
 echoarch:
-	echo "Make for $(ARCH)"
+	@echo "Make for $(OS)-$(ARCH)"
 
-rol:
-	make -f Makefile-rol
-
-rolclean:
-	make -f Makefile-rol clean
+.PHONY: clean echoarch
