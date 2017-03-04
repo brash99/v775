@@ -18,9 +18,10 @@
 #define C775_MAX_WORDS_PER_EVENT  34
 
 /* Define a Structure for access to TDC*/
-struct c775_struct {
-  volatile unsigned long  data[512];
-  unsigned long blank1[512];
+struct c775_struct
+{
+  volatile unsigned int data[512];
+  unsigned int blank1[512];
   volatile unsigned short rev;
   volatile unsigned short geoAddr;
   volatile unsigned short cbltAddr;
@@ -67,7 +68,8 @@ struct c775_struct {
   volatile unsigned short threshold[C775_MAX_CHANNELS];
 };
 
-struct c775_ROM_struct {
+struct c775_ROM_struct
+{
   volatile unsigned short OUI_3;
   unsigned short blank1;
   volatile unsigned short OUI_2;
@@ -96,8 +98,8 @@ struct c775_ROM_struct {
 #define C775_INT_VEC      0xaa
 #define C775_VME_INT_LEVEL   4
 
-#define C775_MIN_FSR       140  /* nsec (High resoulution) */
-#define C775_MAX_FSR      1200  /* nsec (Low resoulution) */
+#define C775_MIN_FSR       140	/* nsec (High resoulution) */
+#define C775_MAX_FSR      1200	/* nsec (Low resoulution) */
 
 #define C775_ROM_OFFSET    0x8026
 
@@ -155,65 +157,33 @@ struct c775_ROM_struct {
 #define C775_GEO_ADDR_MASK   0xf8000000
 #define C775_TDC_DATA_MASK   0x00000fff
 
-/* Macros */
-#define C775_EXEC_SOFT_RESET(id) {					\
-    c775Write(&c775p[id]->bitSet1, C775_SOFT_RESET);			\
-    c775Write(&c775p[id]->bitClear1, C775_SOFT_RESET);}
-
-#define C775_EXEC_DATA_RESET(id) {					\
-    c775Write(&c775p[id]->bitSet2, C775_DATA_RESET);			\
-    c775Write(&c775p[id]->bitClear2, C775_DATA_RESET);}
-
-#define C775_EXEC_READ_EVENT_COUNT(id) {				\
-    volatile unsigned short s1, s2;					\
-    s1 = c775Read(&c775p[id]->evCountL);				\
-    s2 = c775Read(&c775p[id]->evCountH);				\
-    c775EventCount[id] = (c775EventCount[id]&0xff000000) +		\
-      (s2<<16) +							\
-      (s1);}
-#define C775_EXEC_SET_EVTREADCNT(id,val) {				\
-    if(c775EvtReadCnt[id] < 0)						\
-      c775EvtReadCnt[id] = val;						\
-    else								\
-      c775EvtReadCnt[id] = (c775EvtReadCnt[id]&0x7f000000) + val;}
-
-#define C775_EXEC_CLR_EVENT_COUNT(id) {		\
-    c775Write(&c775p[id]->evCountReset, 1);	\
-    c775EventCount[id] = 0;}
-#define C775_EXEC_INCR_EVENT(id) {			\
-    c775Write(&c775p[id]->incrEvent, 1);		\
-    c775EvtReadCnt[id]++;}
-#define C775_EXEC_INCR_WORD(id) {		\
-    c775Write(&c775p[id]->incrOffset, 1);}
-#define C775_EXEC_GATE(id) {			\
-    c775Write(&c775p[id]->swComm, 1);}
-
 /* Function Prototypes */
-STATUS c775Init (UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID);
-void   c775Status( int id, int reg, int sflag);
-int    c775PrintEvent(int id, int pflag);
-int    c775ReadEvent(int id, UINT32 *data);
-int    c775FlushEvent(int id, int fflag);
-int    c775ReadBlock(int id, volatile UINT32 *data, int nwrds);
-STATUS c775IntConnect (VOIDFUNCPTR routine, int arg, UINT16 level, UINT16 vector);
-STATUS c775IntEnable (int id, UINT16 evCnt);
-STATUS c775IntDisable (int iflag);
-STATUS c775IntResume (void);
+STATUS c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID);
+void c775Status(int id, int reg, int sflag);
+int c775PrintEvent(int id, int pflag);
+int c775ReadEvent(int id, UINT32 * data);
+int c775FlushEvent(int id, int fflag);
+int c775ReadBlock(int id, volatile UINT32 * data, int nwrds);
+STATUS c775IntConnect(VOIDFUNCPTR routine, int arg, UINT16 level,
+		      UINT16 vector);
+STATUS c775IntEnable(int id, UINT16 evCnt);
+STATUS c775IntDisable(int iflag);
+STATUS c775IntResume(void);
 UINT16 c775Sparse(int id, int over, int under);
-int    c775Dready(int id);
-int    c775SetFSR(int id, UINT16 fsr);
-INT16  c775BitSet2(int id, UINT16 val);
-INT16  c775BitClear2(int id, UINT16 val);
-void   c775ClearThresh(int id);
-void   c775Gate(int id);
-void   c775IncrEventBlk(int id, int count);
-void   c775IncrEvent(int id);
-void   c775IncrWord(int id);
-void   c775Enable(int id);
-void   c775Disable(int id);
-void   c775CommonStop(int id);
-void   c775CommonStart(int id);
-void   c775Clear(int id);
-void   c775Reset(int id);
+int c775Dready(int id);
+int c775SetFSR(int id, UINT16 fsr);
+INT16 c775BitSet2(int id, UINT16 val);
+INT16 c775BitClear2(int id, UINT16 val);
+void c775ClearThresh(int id);
+void c775Gate(int id);
+void c775IncrEventBlk(int id, int count);
+void c775IncrEvent(int id);
+void c775IncrWord(int id);
+void c775Enable(int id);
+void c775Disable(int id);
+void c775CommonStop(int id);
+void c775CommonStart(int id);
+void c775Clear(int id);
+void c775Reset(int id);
 
 #endif /* __C775LIB__ */
