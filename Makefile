@@ -84,7 +84,7 @@ CFLAGS			+= -O2
 endif
 SRC			= caen775Lib.c
 HDRS			= c775Lib.h
-OBJ			= ${BASENAME}Lib.o
+OBJ			= $(SRC:.c=.o)
 DEPS			= $(SRC:.c=.d)
 
 ifeq ($(OS),LINUX)
@@ -97,11 +97,11 @@ endif
 	@echo " CC     $@"
 	${Q}$(CC) $(CFLAGS) $(INCS) -c -o $@ $(SRC)
 
-%.so: $(SRC)
+%.so: $(OBJ)
 	@echo " CC     $@"
 	${Q}$(CC) -fpic -shared $(CFLAGS) $(INCS) -o $(@:%.a=%.so) $(SRC)
 
-%.a: $(SRC)
+%.a: $(OBJ)
 	@echo " AR     $@"
 	${Q}$(AR) ru $@ $<
 	@echo " RANLIB $@"
