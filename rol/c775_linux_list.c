@@ -1,8 +1,6 @@
 /*************************************************************************
  *
- *  c775_linux_list.c - Library of routines for the user to write for
- *                      readout and buffering of events using
- *                      a Linux VME controller.
+ *  c775_linux_list.c - Readout of C775 TDC with a TIR
  *
  */
 
