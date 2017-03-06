@@ -8,8 +8,6 @@
 *          Jefferson Lab Data Acquisition Group
 *          March 2002
 *
-*  SVN: $Rev$
-*
 */
 #ifndef __C775LIB__
 #define __C775LIB__
@@ -18,74 +16,87 @@
 #define C775_MAX_WORDS_PER_EVENT  34
 
 /* Define a Structure for access to TDC*/
-struct c775_struct
+typedef struct
 {
-  volatile unsigned int data[512];
-  unsigned int blank1[512];
-  volatile unsigned short rev;
-  volatile unsigned short geoAddr;
-  volatile unsigned short cbltAddr;
-  volatile unsigned short bitSet1;
-  volatile unsigned short bitClear1;
-  volatile unsigned short intLevel;
-  volatile unsigned short intVector;
-  volatile unsigned short status1;
-  volatile unsigned short control1;
-  volatile unsigned short aderHigh;
-  volatile unsigned short aderLow;
-  volatile unsigned short ssReset;
-  unsigned short blank2;
-  volatile unsigned short cbltControl;
-  unsigned short blank3[2];
-  volatile unsigned short evTrigger;
-  volatile unsigned short status2;
-  volatile unsigned short evCountL;
-  volatile unsigned short evCountH;
-  volatile unsigned short incrEvent;
-  volatile unsigned short incrOffset;
-  volatile unsigned short loadTest;
-  unsigned short blank4;
-  volatile unsigned short fclrWindow;
-  volatile unsigned short bitSet2;
-  volatile unsigned short bitClear2;
-  volatile unsigned short wMemTestAddr;
-  volatile unsigned short memTestWordH;
-  volatile unsigned short memTestWordL;
-  volatile unsigned short crateSelect;
-  volatile unsigned short testEvWrite;
-  volatile unsigned short evCountReset;
-  unsigned short blank5[15];
-  volatile unsigned short iped;
-  unsigned short blank6;
-  volatile unsigned short rTestAddr;
-  unsigned short blank7;
-  volatile unsigned short swComm;
-  volatile unsigned short slideConst;
-  unsigned short blank8[2];
-  volatile unsigned short AAD;
-  volatile unsigned short BAD;
-  unsigned short blank9[6];
-  volatile unsigned short threshold[C775_MAX_CHANNELS];
-};
+  /* 0x1000 */ volatile unsigned short rev;
+  /* 0x1002 */ volatile unsigned short geoAddr;
+  /* 0x1004 */ volatile unsigned short cbltAddr;
+  /* 0x1006 */ volatile unsigned short bitSet1;
+  /* 0x1008 */ volatile unsigned short bitClear1;
+  /* 0x100A */ volatile unsigned short intLevel;
+  /* 0x100C */ volatile unsigned short intVector;
+  /* 0x100E */ volatile unsigned short status1;
+  /* 0x1010 */ volatile unsigned short control1;
+  /* 0x1012 */ volatile unsigned short aderHigh;
+  /* 0x1014 */ volatile unsigned short aderLow;
+  /* 0x1016 */ volatile unsigned short ssReset;
+  /* 0x1018          */ unsigned short blank2;
+  /* 0x101A */ volatile unsigned short cbltControl;
+  /* 0x101C          */ unsigned short blank3[2];
+  /* 0x1020 */ volatile unsigned short evTrigger;
+  /* 0x1022 */ volatile unsigned short status2;
+  /* 0x1024 */ volatile unsigned short evCountL;
+  /* 0x1026 */ volatile unsigned short evCountH;
+  /* 0x1028 */ volatile unsigned short incrEvent;
+  /* 0x102A */ volatile unsigned short incrOffset;
+  /* 0x102C */ volatile unsigned short loadTest;
+  /* 0x102E          */ unsigned short blank4;
+  /* 0x1030 */ volatile unsigned short fclrWindow;
+  /* 0x1032 */ volatile unsigned short bitSet2;
+  /* 0x1034 */ volatile unsigned short bitClear2;
+  /* 0x1036 */ volatile unsigned short wMemTestAddr;
+  /* 0x1038 */ volatile unsigned short memTestWordH;
+  /* 0x103A */ volatile unsigned short memTestWordL;
+  /* 0x103C */ volatile unsigned short crateSelect;
+  /* 0x103E */ volatile unsigned short testEvWrite;
+  /* 0x1040 */ volatile unsigned short evCountReset;
+  /* 0x1042          */ unsigned short blank5[15];
+  /* 0x1060 */ volatile unsigned short fsr;
+  /* 0x1062          */ unsigned short blank6;
+  /* 0x1064 */ volatile unsigned short rTestAddr;
+  /* 0x1066          */ unsigned short blank7;
+  /* 0x1068 */ volatile unsigned short swComm;
+  /* 0x106A */ volatile unsigned short slideConst;
+  /* 0x106C          */ unsigned short blank8[2];
+  /* 0x1070 */ volatile unsigned short AAD;
+  /* 0x1072 */ volatile unsigned short BAD;
+  /* 0x1074          */ unsigned short blank9[(0x1080 - 0x1074)>>1];
+  /* 0x1080 */ volatile unsigned short threshold[C775_MAX_CHANNELS];
+} c775_main;
 
-struct c775_ROM_struct
+typedef struct
 {
-  volatile unsigned short OUI_3;
-  unsigned short blank1;
-  volatile unsigned short OUI_2;
-  unsigned short blank2;
-  volatile unsigned short OUI_1;
-  unsigned short blank3;
-  volatile unsigned short version;
-  unsigned short blank4;
-  volatile unsigned short ID_3;
-  unsigned short blank5;
-  volatile unsigned short ID_2;
-  unsigned short blank6;
-  volatile unsigned short ID_1;
-  unsigned short blank7[7];
-  volatile unsigned short revision;
-};
+  /* 0x8000          */ unsigned short blank0[0x26>>2];
+  /* 0x8026 */ volatile unsigned short OUI_3;
+  /* 0x8028          */ unsigned short blank1;
+  /* 0x802A */ volatile unsigned short OUI_2;
+  /* 0x802C          */ unsigned short blank2;
+  /* 0x802E */ volatile unsigned short OUI_1;
+  /* 0x8030          */ unsigned short blank3;
+  /* 0x8032 */ volatile unsigned short version;
+  /* 0x8034          */ unsigned short blank4;
+  /* 0x8036 */ volatile unsigned short ID_3;
+  /* 0x8038          */ unsigned short blank5;
+  /* 0x803A */ volatile unsigned short ID_2;
+  /* 0x803C          */ unsigned short blank6;
+  /* 0x803E */ volatile unsigned short ID_1;
+  /* 0x8040          */ unsigned short blank7[(0x804E - 0x8040)>>1];
+  /* 0x804E */ volatile unsigned short revision;
+  /* 0x8050          */ unsigned short blank8[(0x8F02 - 0x8050)>>1];
+  /* 0x8F02 */ volatile unsigned short serial_msb;
+  /* 0x8F04          */ unsigned short blank9;
+  /* 0x8F06 */ volatile unsigned short serial_lsb;
+}  c775_ROM;
+
+/* Define a Structure for access to TDC*/
+typedef struct
+{
+  /* 0x0000 */ volatile unsigned int data[512];
+  /* 0x0800          */ unsigned int blank1[(0x1000 - 0x0800)>>2];
+  /* 0x1000          */ c775_main main;
+  /* 0x10C0          */ unsigned int blank2[(0x8000 - 0x10C0)>>2];
+  /* 0x8000          */ c775_ROM  rom;
+}  c775_regs;
 
 
 #define C775_BOARD_ID   0x00000307
@@ -111,17 +122,21 @@ struct c775_ROM_struct
 #define C775_BUFFER_EMPTY  0x2
 #define C775_BUFFER_FULL   0x4
 
+/* status1 */
 #define C775_DATA_READY    0x1
 #define C775_BUSY          0x4
+#define C775_EVRDY         0x100
 
+/* control */
 #define C775_BLK_END       0x04
 #define C775_BERR_ENABLE   0x20
 #define C775_ALIGN64       0x40
 
+/* bitset2 */
 #define C775_MEM_TEST            0x1
 #define C775_OFFLINE             0x2
-#define C775_OVERFLOW_SUP        0x8
-#define C775_UNDERFLOW_SUP      0x10
+#define C775_OVER_RANGE          0x8
+#define C775_LOW_THRESHOLD      0x10
 #define C775_INVALID_SUP        0x20
 #define C775_TEST_MODE          0x40
 #define C775_SLIDE_ENABLE       0x80
@@ -159,7 +174,7 @@ struct c775_ROM_struct
 
 /* Function Prototypes */
 STATUS c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID);
-void c775Status(int id, int reg, int sflag);
+void c775Status(int id);
 int c775PrintEvent(int id, int pflag);
 int c775ReadEvent(int id, UINT32 * data);
 int c775FlushEvent(int id, int fflag);

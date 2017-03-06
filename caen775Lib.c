@@ -12,8 +12,6 @@
 *                    - Programmed I/O reads
 *                    - Interrupts from a Single 775
 *
-* SVN: $Rev$
-*
 */
 
 #include <stdio.h>
@@ -58,8 +56,8 @@ LOCAL UINT32 c775IntVec = C775_INT_VEC;	/* default interrupt Vector */
 
 /* Define global variables */
 int Nc775 = 0;			/* Number of TDCs in Crate */
-volatile struct c775_struct *c775p[20];	/* pointers to TDC memory map */
-volatile struct c775_struct *c775pl[20];	/* Support for 68K second memory map A24/D32 */
+volatile c775_regs *c775p[20];	/* pointers to TDC memory map */
+volatile c775_regs *c775pl[20];	/* Support for 68K second memory map A24/D32 */
 int c775IntCount = 0;		/* Count of interrupts from TDC */
 int c775EventCount[20];		/* Count of Events taken by TDC (Event Count Register value) */
 int c775EvtReadCnt[20];		/* Count of events read from specified TDC */
@@ -71,17 +69,17 @@ SEM_ID c775Sem;			/* Semephore for Task syncronization */
 
 /* Macros */
 #define C775_EXEC_SOFT_RESET(id) {					\
-    vmeWrite16(&c775p[id]->bitSet1, C775_SOFT_RESET);			\
-    vmeWrite16(&c775p[id]->bitClear1, C775_SOFT_RESET);}
+    vmeWrite16(&c775p[id]->main.bitSet1, C775_SOFT_RESET);			\
+    vmeWrite16(&c775p[id]->main.bitClear1, C775_SOFT_RESET);}
 
 #define C775_EXEC_DATA_RESET(id) {					\
-    vmeWrite16(&c775p[id]->bitSet2, C775_DATA_RESET);			\
-    vmeWrite16(&c775p[id]->bitClear2, C775_DATA_RESET);}
+    vmeWrite16(&c775p[id]->main.bitSet2, C775_DATA_RESET);			\
+    vmeWrite16(&c775p[id]->main.bitClear2, C775_DATA_RESET);}
 
 #define C775_EXEC_READ_EVENT_COUNT(id) {				\
     volatile unsigned short s1, s2;					\
-    s1 = vmeRead16(&c775p[id]->evCountL);				\
-    s2 = vmeRead16(&c775p[id]->evCountH);				\
+    s1 = vmeRead16(&c775p[id]->main.evCountL);				\
+    s2 = vmeRead16(&c775p[id]->main.evCountH);				\
     c775EventCount[id] = (c775EventCount[id]&0xff000000) +		\
       (s2<<16) +							\
       (s1);}
@@ -92,15 +90,15 @@ SEM_ID c775Sem;			/* Semephore for Task syncronization */
       c775EvtReadCnt[id] = (c775EvtReadCnt[id]&0x7f000000) + val;}
 
 #define C775_EXEC_CLR_EVENT_COUNT(id) {		\
-    vmeWrite16(&c775p[id]->evCountReset, 1);	\
+    vmeWrite16(&c775p[id]->main.evCountReset, 1);	\
     c775EventCount[id] = 0;}
 #define C775_EXEC_INCR_EVENT(id) {			\
-    vmeWrite16(&c775p[id]->incrEvent, 1);		\
+    vmeWrite16(&c775p[id]->main.incrEvent, 1);		\
     c775EvtReadCnt[id]++;}
 #define C775_EXEC_INCR_WORD(id) {		\
-    vmeWrite16(&c775p[id]->incrOffset, 1);}
+    vmeWrite16(&c775p[id]->main.incrOffset, 1);}
 #define C775_EXEC_GATE(id) {			\
-    vmeWrite16(&c775p[id]->swComm, 1);}
+    vmeWrite16(&c775p[id]->main.swComm, 1);}
 
 
 /*******************************************************************************
@@ -112,12 +110,12 @@ SEM_ID c775Sem;			/* Semephore for Task syncronization */
 */
 
 STATUS
-c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID)
+c775Init(UINT32 addr, UINT32 addr_inc, int ntdc, UINT16 crateID)
 {
   int ii, res, rdata, errFlag = 0;
   int boardID = 0;
   unsigned long laddr, lladdr;
-  volatile struct c775_ROM_struct *rp;
+  volatile c775_ROM *rp;
 
 
   /* Check for valid address */
@@ -129,8 +127,8 @@ c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID)
     }
   else if (addr < 0x00ffffff)
     {				/* A24 Addressing */
-      if ((addr_inc == 0) || (nadc == 0))
-	nadc = 1;		/* assume only one TDC to initialize */
+      if ((addr_inc == 0) || (ntdc == 0))
+	ntdc = 1;		/* assume only one TDC to initialize */
 
       /* get the TDCs address */
 #ifdef VXWORKS
@@ -161,8 +159,8 @@ c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID)
       return (ERROR);
 #endif
 
-      if ((addr_inc == 0) || (nadc == 0))
-	nadc = 1;		/* assume only one TDC to initialize */
+      if ((addr_inc == 0) || (ntdc == 0))
+	ntdc = 1;		/* assume only one TDC to initialize */
 
       /* get the TDC address */
 #ifdef VXWORKS
@@ -195,15 +193,15 @@ c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID)
 
 
   Nc775 = 0;
-  for (ii = 0; ii < nadc; ii++)
+  for (ii = 0; ii < ntdc; ii++)
     {
-      c775p[ii] = (struct c775_struct *) (laddr + ii * addr_inc);
-      c775pl[ii] = (struct c775_struct *) (lladdr + ii * addr_inc);
+      c775p[ii] = (c775_regs *) (laddr + ii * addr_inc);
+      c775pl[ii] = (c775_regs *) (lladdr + ii * addr_inc);
       /* Check if Board exists at that address */
 #ifdef VXWORKS
-      res = vxMemProbe((char *) &(c775p[ii]->rev), 0, 2, (char *) &rdata);
+      res = vxMemProbe((char *) &(c775p[ii]->main.rev), 0, 2, (char *) &rdata);
 #else
-      res = vmeMemProbe((char *) &(c775p[ii]->rev), 2, (char *) &rdata);
+      res = vmeMemProbe((char *) &(c775p[ii]->main.rev), 2, (char *) &rdata);
 #endif
       if (res < 0)
 	{
@@ -216,8 +214,7 @@ c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID)
       else
 	{
 	  /* Check if this is a Model 775 */
-	  rp =
-	    (struct c775_ROM_struct *) ((UINT32) c775p[ii] + C775_ROM_OFFSET);
+	  rp = (c775_ROM *) ((UINT32) &c775p[ii]->rom);
 	  boardID =
 	    ((vmeRead16(&rp->ID_3) & (0xff)) << 16) +
 	    ((vmeRead16(&rp->ID_2) & (0xff)) << 8) +
@@ -234,7 +231,7 @@ c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID)
       printf("Initialized TDC ID %d at address 0x%08x \n", ii,
 	     (UINT32) c775p[ii]);
 #else
-      printf("Initialized TDC ID %d at VME (USER) address 0x%x (0x%x)\n", ii,
+      printf("Initialized TDC ID %d at VME (LOCAL) address 0x%x (0x%x)\n", ii,
 	     (UINT32) c775p[ii] - c775MemOffset, (UINT32) c775p[ii]);
 #endif
     }
@@ -259,11 +256,16 @@ c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID)
     {
       C775_EXEC_SOFT_RESET(ii);
       C775_EXEC_DATA_RESET(ii);
-      vmeWrite16(&c775p[ii]->intLevel, 0);	/* Disable Interrupts */
-      vmeWrite16(&c775p[ii]->evTrigger, 0);	/* Zero interrupt trigger count */
-      vmeWrite16(&c775p[ii]->crateSelect, crateID);	/* Set Crate ID Register */
-      vmeWrite16(&c775p[ii]->bitClear2, C775_INCR_ALL_TRIG);	/* Increment event count only on
-								   accepted gates */
+      /* Disable Interrupts */
+      vmeWrite16(&c775p[ii]->main.intLevel, 0);
+      /* Zero interrupt trigger count */
+      vmeWrite16(&c775p[ii]->main.evTrigger, 0);
+      /* Set Crate ID Register */
+      vmeWrite16(&c775p[ii]->main.crateSelect, crateID);
+      /* Increment event count only on accepted gates */
+      vmeWrite16(&c775p[ii]->main.bitClear2, C775_INCR_ALL_TRIG);
+      /* Turn off suppression of header and EOB if no accepted channels */
+      vmeWrite16(&c775p[ii]->main.bitClear2, C775_INC_HEADER);
 
       c775EventCount[ii] = 0;	/* Initialize the Event Count */
       c775EvtReadCnt[ii] = -1;	/* Initialize the Read Count */
@@ -304,7 +306,7 @@ c775Init(UINT32 addr, UINT32 addr_inc, int nadc, UINT16 crateID)
 */
 
 void
-c775Status(int id, int reg, int sflag)
+c775Status(int id)
 {
 
   int DRdy = 0, BufFull = 0;
@@ -321,22 +323,22 @@ c775Status(int id, int reg, int sflag)
 
   /* read various registers */
   C775LOCK;
-  rev = vmeRead16(&c775p[id]->rev);
-  stat1 = vmeRead16(&c775p[id]->status1) & C775_STATUS1_MASK;
-  stat2 = vmeRead16(&c775p[id]->status2) & C775_STATUS2_MASK;
-  bit1 = vmeRead16(&c775p[id]->bitSet1) & C775_BITSET1_MASK;
-  bit2 = vmeRead16(&c775p[id]->bitSet2) & C775_BITSET2_MASK;
-  cntl1 = vmeRead16(&c775p[id]->control1) & C775_CONTROL1_MASK;
-  fsr = 4 * (290 - (vmeRead16(&c775p[id]->iped) & C775_FSR_MASK));
+  rev = vmeRead16(&c775p[id]->main.rev);
+  stat1 = vmeRead16(&c775p[id]->main.status1) & C775_STATUS1_MASK;
+  stat2 = vmeRead16(&c775p[id]->main.status2) & C775_STATUS2_MASK;
+  bit1 = vmeRead16(&c775p[id]->main.bitSet1) & C775_BITSET1_MASK;
+  bit2 = vmeRead16(&c775p[id]->main.bitSet2) & C775_BITSET2_MASK;
+  cntl1 = vmeRead16(&c775p[id]->main.control1) & C775_CONTROL1_MASK;
+  fsr = 4 * (290 - (vmeRead16(&c775p[id]->main.fsr) & C775_FSR_MASK));
   C775_EXEC_READ_EVENT_COUNT(id);
   if (stat1 & C775_DATA_READY)
     DRdy = 1;
   if (stat2 & C775_BUFFER_FULL)
     BufFull = 1;
 
-  iLvl = vmeRead16(&c775p[id]->intLevel) & C775_INTLEVEL_MASK;
-  iVec = vmeRead16(&c775p[id]->intVector) & C775_INTVECTOR_MASK;
-  evTrig = vmeRead16(&c775p[id]->evTrigger) & C775_EVTRIGGER_MASK;
+  iLvl = vmeRead16(&c775p[id]->main.intLevel) & C775_INTLEVEL_MASK;
+  iVec = vmeRead16(&c775p[id]->main.intVector) & C775_INTVECTOR_MASK;
+  evTrig = vmeRead16(&c775p[id]->main.evTrigger) & C775_EVTRIGGER_MASK;
   C775UNLOCK;
 
   /* print out status info */
@@ -345,10 +347,10 @@ c775Status(int id, int reg, int sflag)
   printf("STATUS for TDC id %d at base address 0x%x \n", id,
 	 (UINT32) c775p[id]);
 #else
-  printf("STATUS for TDC id %d at VME (USER) base address 0x%x (0x%x) \n", id,
+  printf("STATUS for TDC id %d at VME (LOCAL) base address 0x%x (0x%x) \n", id,
 	 (UINT32) c775p[id] - c775MemOffset, (UINT32) c775p[id]);
 #endif
-  printf("---------------------------------------------- \n");
+  printf("--------------------------------------------------------------------------------\n");
   printf(" Firmware Revision = %d.%d\n", rev >> 8, rev & 0xff);
 
   if ((iLvl > 0) && (evTrig > 0))
@@ -364,21 +366,41 @@ c775Status(int id, int reg, int sflag)
     }
   printf("\n");
 
-  printf("             --1--  --2--\n");
-  if (BufFull && DRdy)
-    {
-      printf("  Status  = 0x%04x 0x%04x  (Buffer Full)\n", stat1, stat2);
-    }
-  else if (DRdy)
-    {
-      printf("  Status  = 0x%04x 0x%04x  (Data Ready)\n", stat1, stat2);
-    }
-  else
-    {
-      printf("  Status  = 0x%04x 0x%04x\n", stat1, stat2);
-    }
-  printf("  BitSet  = 0x%04x 0x%04x\n", bit1, bit2);
-  printf("  Control = 0x%04x\n", cntl1);
+  printf("             --1--                  --2--\n");
+  printf("  Status:    0x%04x                 0x%04x\n", stat1, stat2);
+  printf("    Data Ready = %d      Buffer Empty = %d\n",
+	 (stat1 & C775_DATA_READY)?1:0, (stat2 & C775_BUFFER_EMPTY)?1:0);
+  printf("          Busy = %d       Buffer Full = %d\n",
+	 (stat1 & C775_BUSY)?1:0, (stat2 & C775_BUFFER_FULL)?1:0);
+  printf("       EvReady = %d\n",
+	 (stat1 & C775_EVRDY)?1:0);
+  printf("\n");
+
+  printf("  BitSet:    0x%04x                 0x%04x\n", bit1, bit2);
+  printf("          BERR = %d        Over Range = %d\n",
+	 (bit1 & C775_VME_BUS_ERROR)?1:0, (bit2 & C775_OVER_RANGE)?1:0);
+  printf("      Sel Addr = %d     Low Threshold = %d\n",
+	 (bit1 & 0x10)?1:0, (bit2 & C775_LOW_THRESHOLD)?1:0);
+  printf("    Soft Reset = %d       Common Stop = %d\n",
+	 (bit1 & 0x80)?1:0, (bit2 & C775_COMMON_STOP)?1:0);
+  printf("                         Slide Enable = %d\n",
+	 (bit2 & C775_SLIDE_ENABLE)?1:0);
+  printf("                            Auto Incr = %d\n",
+	 (bit2 & C775_AUTO_INCR)?1:0);
+  printf("                           Empty Prog = %d\n",
+	 (bit2 & C775_INC_HEADER)?1:0);
+  printf("                     Slide Sub Enable = %d\n",
+	 (bit2 & C775_SLIDE_SUB_ENABLE)?1:0);
+  printf("                              All Trg = %d\n",
+	 (bit2 & C775_INCR_ALL_TRIG)?1:0);
+  printf("\n");
+
+  printf("  Control:   0x%04x\n", cntl1);
+  printf("       Blk End = %d\n", cntl1 & C775_BLK_END);
+  printf("   BERR Enable = %d\n", cntl1 & C775_BERR_ENABLE);
+  printf("      Align 64 = %d\n", cntl1 & C775_ALIGN64);
+  printf("\n");
+
   printf("  FSR     = %d nsec\n", fsr);
   if (c775EventCount[id] == 0xffffff)
     {
@@ -393,6 +415,9 @@ c775Status(int id, int reg, int sflag)
       else
 	printf("  Last Event Read = %d\n", c775EvtReadCnt[id]);
     }
+
+  printf("--------------------------------------------------------------------------------\n");
+  printf("\n\n");
 
 }
 
@@ -420,13 +445,13 @@ c775PrintEvent(int id, int pflag)
   /* Check if there is a valid event */
 
   C775LOCK;
-  if (vmeRead16(&c775p[id]->status2) & C775_BUFFER_EMPTY)
+  if (vmeRead16(&c775p[id]->main.status2) & C775_BUFFER_EMPTY)
     {
       printf("c775PrintEvent: Data Buffer is EMPTY!\n");
       C775UNLOCK;
       return (0);
     }
-  if (vmeRead16(&c775p[id]->status1) & C775_DATA_READY)
+  if (vmeRead16(&c775p[id]->main.status1) & C775_DATA_READY)
     {
       dCnt = 0;
       /* Read Header - Get Word count */
@@ -508,13 +533,13 @@ c775ReadEvent(int id, UINT32 * data)
   /* Check if there is a valid event */
 
   C775LOCK;
-  if (vmeRead16(&c775p[id]->status2) & C775_BUFFER_EMPTY)
+  if (vmeRead16(&c775p[id]->main.status2) & C775_BUFFER_EMPTY)
     {
       logMsg("c775ReadEvent: Data Buffer is EMPTY!\n", 0, 0, 0, 0, 0, 0);
       C775UNLOCK;
       return (0);
     }
-  if (vmeRead16(&c775p[id]->status1) & C775_DATA_READY)
+  if (vmeRead16(&c775p[id]->main.status1) & C775_DATA_READY)
     {
       dCnt = 0;
       /* Read Header - Get Word count */
@@ -604,7 +629,7 @@ c775FlushEvent(int id, int fflag)
   /* Check if there is a valid event */
 
   C775LOCK;
-  if (vmeRead16(&c775p[id]->status2) & C775_BUFFER_EMPTY)
+  if (vmeRead16(&c775p[id]->main.status2) & C775_BUFFER_EMPTY)
     {
       if (fflag > 0)
 	logMsg("c775FlushEvent: Data Buffer is EMPTY!\n", 0, 0, 0, 0, 0, 0);
@@ -613,7 +638,7 @@ c775FlushEvent(int id, int fflag)
     }
 
   /* Check if Data Ready Flag is on */
-  if (vmeRead16(&c775p[id]->status1) & C775_DATA_READY)
+  if (vmeRead16(&c775p[id]->main.status1) & C775_DATA_READY)
     {
       dCnt = 0;
 
@@ -750,10 +775,10 @@ c775ReadBlock(int id, volatile UINT32 * data, int nwrds)
   if (retVal != 0)
     {
       /* Check to see if error was generated by TDC */
-      stat = vmeRead16(&c775p[id]->bitSet1) & C775_VME_BUS_ERROR;
+      stat = vmeRead16(&c775p[id]->main.bitSet1) & C775_VME_BUS_ERROR;
       if ((retVal > 0) && (stat))
 	{
-	  vmeWrite16(&c775p[id]->bitClear1, C775_VME_BUS_ERROR);
+	  vmeWrite16(&c775p[id]->main.bitClear1, C775_VME_BUS_ERROR);
 /*       logMsg("c775ReadBlock: INFO: DMA terminated by TDC(BUS Error) - Transfer OK\n",0,0,0,0,0,0); */
 #ifdef VXWORKS
 	  xferCount = (nwrds - (retVal >> 2));	/* Number of Longwords transfered */
@@ -854,7 +879,7 @@ c775Int(void)
          indicate a possible error. In either case the data is
          effectively thrown away */
       C775LOCK;
-      nevt = vmeRead16(&c775p[c775IntID]->evTrigger) & C775_EVTRIGGER_MASK;
+      nevt = vmeRead16(&c775p[c775IntID]->main.evTrigger) & C775_EVTRIGGER_MASK;
       C775UNLOCK;
       while ((ii < nevt) && (c775Dready(c775IntID) > 0))
 	{
@@ -1022,9 +1047,9 @@ c775IntEnable(int id, UINT16 evCnt)
   c775IntRunning = TRUE;
   /* Enable interrupts on TDC */
   C775LOCK;
-  vmeWrite16(&c775p[c775IntID]->intVector, c775IntVec);
-  vmeWrite16(&c775p[c775IntID]->intLevel, c775IntLevel);
-  vmeWrite16(&c775p[c775IntID]->evTrigger, c775IntEvCount);
+  vmeWrite16(&c775p[c775IntID]->main.intVector, c775IntVec);
+  vmeWrite16(&c775p[c775IntID]->main.intLevel, c775IntLevel);
+  vmeWrite16(&c775p[c775IntID]->main.evTrigger, c775IntEvCount);
   C775UNLOCK;
 
   return (OK);
@@ -1053,14 +1078,14 @@ c775IntDisable(int iflag)
   sysIntDisable(c775IntLevel);	/* Disable VME interrupts */
 #endif
   C775LOCK;
-  vmeWrite16(&c775p[c775IntID]->evTrigger, 0);
+  vmeWrite16(&c775p[c775IntID]->main.evTrigger, 0);
 
   /* Tell tasks that Interrupts have been disabled */
   if (iflag > 0)
     {
       c775IntRunning = FALSE;
-      vmeWrite16(&c775p[c775IntID]->intLevel, 0);
-      vmeWrite16(&c775p[c775IntID]->intVector, 0);
+      vmeWrite16(&c775p[c775IntID]->main.intLevel, 0);
+      vmeWrite16(&c775p[c775IntID]->main.intVector, 0);
     }
 #ifdef VXWORKS
   else
@@ -1096,13 +1121,13 @@ c775IntResume(void)
   C775LOCK;
   if ((c775IntRunning))
     {
-      evTrig = vmeRead16(&c775p[c775IntID]->evTrigger) & C775_EVTRIGGER_MASK;
+      evTrig = vmeRead16(&c775p[c775IntID]->main.evTrigger) & C775_EVTRIGGER_MASK;
       if (evTrig == 0)
 	{
 #ifdef VXWORKS
 	  sysIntEnable(c775IntLevel);
 #endif
-	  vmeWrite16(&c775p[c775IntID]->evTrigger, c775IntEvCount);
+	  vmeWrite16(&c775p[c775IntID]->main.evTrigger, c775IntEvCount);
 	}
       else
 	{
@@ -1148,22 +1173,22 @@ c775Sparse(int id, int over, int under)
   C775LOCK;
   if (!over)
     {				/* Set Overflow suppression */
-      vmeWrite16(&c775p[id]->bitSet2, C775_OVERFLOW_SUP);
+      vmeWrite16(&c775p[id]->main.bitSet2, C775_OVER_RANGE);
     }
   else
     {
-      vmeWrite16(&c775p[id]->bitClear2, C775_OVERFLOW_SUP);
+      vmeWrite16(&c775p[id]->main.bitClear2, C775_OVER_RANGE);
     }
 
   if (!under)
     {				/* Set Underflow suppression */
-      vmeWrite16(&c775p[id]->bitSet2, C775_UNDERFLOW_SUP);
+      vmeWrite16(&c775p[id]->main.bitSet2, C775_LOW_THRESHOLD);
     }
   else
     {
-      vmeWrite16(&c775p[id]->bitClear2, C775_UNDERFLOW_SUP);
+      vmeWrite16(&c775p[id]->main.bitClear2, C775_LOW_THRESHOLD);
     }
-  rval = vmeRead16(&c775p[id]->bitSet2) & C775_BITSET2_MASK;
+  rval = vmeRead16(&c775p[id]->main.bitSet2) & C775_BITSET2_MASK;
 
   C775UNLOCK;
   return (rval);
@@ -1194,7 +1219,7 @@ c775Dready(int id)
     }
 
   C775LOCK;
-  stat = vmeRead16(&c775p[id]->status1) & C775_DATA_READY;
+  stat = vmeRead16(&c775p[id]->main.status1) & C775_DATA_READY;
   if (stat)
     {
       C775_EXEC_READ_EVENT_COUNT(id);
@@ -1247,7 +1272,7 @@ c775SetFSR(int id, UINT16 fsr)
   C775LOCK;
   if (fsr == 0)
     {
-      reg = vmeRead16(&c775p[id]->iped) & C775_FSR_MASK;
+      reg = vmeRead16(&c775p[id]->main.fsr) & C775_FSR_MASK;
       rfsr = (int) (290 - reg) * 4;
     }
   else if ((fsr < C775_MIN_FSR) || (fsr > C775_MAX_FSR))
@@ -1260,8 +1285,8 @@ c775SetFSR(int id, UINT16 fsr)
   else
     {
       reg = (UINT16) (290 - (fsr >> 2));
-      vmeWrite16(&c775p[id]->iped, reg);
-      reg = vmeRead16(&c775p[id]->iped) & C775_FSR_MASK;
+      vmeWrite16(&c775p[id]->main.fsr, reg);
+      reg = vmeRead16(&c775p[id]->main.fsr) & C775_FSR_MASK;
       rfsr = (int) (290 - reg) * 4;
     }
 
@@ -1292,8 +1317,8 @@ c775BitSet2(int id, UINT16 val)
 
   C775LOCK;
   if (val)
-    vmeWrite16(&c775p[id]->bitSet2, val);
-  rval = vmeRead16(&c775p[id]->bitSet2) & C775_BITSET2_MASK;
+    vmeWrite16(&c775p[id]->main.bitSet2, val);
+  rval = vmeRead16(&c775p[id]->main.bitSet2) & C775_BITSET2_MASK;
 
   C775UNLOCK;
   return (rval);
@@ -1313,8 +1338,8 @@ c775BitClear2(int id, UINT16 val)
 
   C775LOCK;
   if (val)
-    vmeWrite16(&c775p[id]->bitClear2, val);
-  rval = vmeRead16(&c775p[id]->bitSet2) & C775_BITSET2_MASK;
+    vmeWrite16(&c775p[id]->main.bitClear2, val);
+  rval = vmeRead16(&c775p[id]->main.bitSet2) & C775_BITSET2_MASK;
 
   C775UNLOCK;
   return (rval);
@@ -1356,7 +1381,7 @@ c775ClearThresh(int id)
   C775LOCK;
   for (ii = 0; ii < C775_MAX_CHANNELS; ii++)
     {
-      vmeWrite16(&c775p[id]->threshold[ii], 0);
+      vmeWrite16(&c775p[id]->main.threshold[ii], 0);
     }
   C775UNLOCK;
 }
@@ -1380,13 +1405,13 @@ c775EnableBerr(int id)
 {
   if ((id < 0) || (c775p[id] == NULL))
     {
-      logMsg("%s: ERROR : QDC id %d not initialized \n", __FUNCTION__, id, 0,
+      logMsg("c775EnableBerr: ERROR : QDC id %d not initialized \n", id, 0, 0,
 	     0, 0, 0);
       return;
     }
 
   C775LOCK;
-  vmeWrite16(&c775p[id]->control1, C775_BERR_ENABLE);	/*  | C775_BLK_END); */
+  vmeWrite16(&c775p[id]->main.control1, C775_BERR_ENABLE);	/*  | C775_BLK_END); */
   C775UNLOCK;
 }
 
@@ -1395,15 +1420,15 @@ c775DisableBerr(int id)
 {
   if ((id < 0) || (c775p[id] == NULL))
     {
-      logMsg("%s: ERROR : QDC id %d not initialized \n", __FUNCTION__, id, 0,
+      logMsg("c775DisableBerr: ERROR : QDC id %d not initialized \n", id, 0, 0,
 	     0, 0, 0);
       return;
     }
 
   C775LOCK;
-  vmeWrite16(&c775p[id]->control1,
-	    vmeRead16(&c775p[id]->
-		     control1) & ~(C775_BERR_ENABLE | C775_BLK_END));
+  vmeWrite16(&c775p[id]->main.control1,
+	    vmeRead16(&c775p[id]->main.control1)
+	     & ~(C775_BERR_ENABLE | C775_BLK_END));
   C775UNLOCK;
 }
 
@@ -1459,7 +1484,7 @@ c775Enable(int id)
       return;
     }
   C775LOCK;
-  vmeWrite16(&c775p[id]->bitClear2, C775_OFFLINE);
+  vmeWrite16(&c775p[id]->main.bitClear2, C775_OFFLINE);
   C775UNLOCK;
 }
 
@@ -1473,7 +1498,7 @@ c775Disable(int id)
       return;
     }
   C775LOCK;
-  vmeWrite16(&c775p[id]->bitSet2, C775_OFFLINE);
+  vmeWrite16(&c775p[id]->main.bitSet2, C775_OFFLINE);
   C775UNLOCK;
 }
 
@@ -1487,7 +1512,7 @@ c775CommonStop(int id)
       return;
     }
   C775LOCK;
-  vmeWrite16(&c775p[id]->bitSet2, C775_COMMON_STOP);
+  vmeWrite16(&c775p[id]->main.bitSet2, C775_COMMON_STOP);
   C775UNLOCK;
 }
 
@@ -1501,7 +1526,7 @@ c775CommonStart(int id)
       return;
     }
   C775LOCK;
-  vmeWrite16(&c775p[id]->bitClear2, C775_COMMON_STOP);
+  vmeWrite16(&c775p[id]->main.bitClear2, C775_COMMON_STOP);
   C775UNLOCK;
 }
 
