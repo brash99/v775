@@ -1,9 +1,9 @@
 /******************************************************************************
 *
 *  caen775Lib.c  -  Driver library for readout of C.A.E.N. Model 775 TDC
-*                   using a VxWorks 5.2 or later based Single Board computer. 
+*                   using a VxWorks 5.2 or later based Single Board computer.
 *
-*  Author: David Abbott 
+*  Author: David Abbott
 *          Jefferson Lab Data Acquisition Group
 *          March 2002
 *
@@ -103,7 +103,7 @@ SEM_ID c775Sem;			/* Semephore for Task syncronization */
 
 /*******************************************************************************
 *
-* c775Init - Initialize c775 Library. 
+* c775Init - Initialize c775 Library.
 *
 *
 * RETURNS: OK, or ERROR if the address is invalid or board is not present.
@@ -140,7 +140,8 @@ c775Init(UINT32 addr, UINT32 addr_inc, int ntdc, UINT16 crateID)
 	  return (ERROR);
 	}
 #else
-      res = vmeBusToLocalAdrs(0x39, (char *) addr, (char **) &laddr);
+      res = vmeBusToLocalAdrs(0x39, (char *)(unsigned long) addr,
+			      (char **)(unsigned long) &laddr);
       if (res != 0)
 	{
 	  printf("c775Init: ERROR in vmeBusToLocalAdrs(0x39,0x%x,&laddr) \n",
@@ -172,7 +173,8 @@ c775Init(UINT32 addr, UINT32 addr_inc, int ntdc, UINT16 crateID)
 	  return (ERROR);
 	}
 #else
-      res = vmeBusToLocalAdrs(0x09, (char *) addr, (char **) &laddr);
+      res = vmeBusToLocalAdrs(0x09, (char *) (unsigned long)addr,
+			      (char **) (unsigned long)&laddr);
       if (res != 0)
 	{
 	  printf("c775Init: ERROR in vmeBusToLocalAdrs(0x09,0x%x,&laddr) \n",
@@ -206,7 +208,7 @@ c775Init(UINT32 addr, UINT32 addr_inc, int ntdc, UINT16 crateID)
       if (res < 0)
 	{
 	  printf("c775Init: ERROR: No addressable board at addr=0x%x\n",
-		 (UINT32) c775p[ii]);
+		 (unsigned long) c775p[ii] - c775MemOffset);
 	  c775p[ii] = NULL;
 	  errFlag = 1;
 	  break;
@@ -214,7 +216,7 @@ c775Init(UINT32 addr, UINT32 addr_inc, int ntdc, UINT16 crateID)
       else
 	{
 	  /* Check if this is a Model 775 */
-	  rp = (c775_ROM *) ((UINT32) &c775p[ii]->rom);
+	  rp = (c775_ROM *) ((unsigned long) &c775p[ii]->rom);
 	  boardID =
 	    ((vmeRead16(&rp->ID_3) & (0xff)) << 16) +
 	    ((vmeRead16(&rp->ID_2) & (0xff)) << 8) +
@@ -232,7 +234,7 @@ c775Init(UINT32 addr, UINT32 addr_inc, int ntdc, UINT16 crateID)
 	     (UINT32) c775p[ii]);
 #else
       printf("Initialized TDC ID %d at VME (LOCAL) address 0x%x (0x%x)\n", ii,
-	     (UINT32) c775p[ii] - c775MemOffset, (UINT32) c775p[ii]);
+	     (unsigned long) c775p[ii] - c775MemOffset, (unsigned long) c775p[ii]);
 #endif
     }
 
@@ -348,7 +350,7 @@ c775Status(int id)
 	 (UINT32) c775p[id]);
 #else
   printf("STATUS for TDC id %d at VME (LOCAL) base address 0x%x (0x%x) \n", id,
-	 (UINT32) c775p[id] - c775MemOffset, (UINT32) c775p[id]);
+	 (unsigned long) c775p[id] - c775MemOffset, (unsigned long) c775p[id]);
 #endif
   printf("--------------------------------------------------------------------------------\n");
   printf(" Firmware Revision = %d.%d\n", rev >> 8, rev & 0xff);
@@ -423,7 +425,7 @@ c775Status(int id)
 
 /*******************************************************************************
 *
-* c775PrintEvent - Print event from TDC to standard out. 
+* c775PrintEvent - Print event from TDC to standard out.
 *
 *
 * RETURNS: Number of Data words read from the TDC (including Header/Trailer).
@@ -509,7 +511,7 @@ c775PrintEvent(int id, int pflag)
 
 /*******************************************************************************
 *
-* c775ReadEvent - Read event from TDC to specified address. 
+* c775ReadEvent - Read event from TDC to specified address.
 *
 *
 *
@@ -605,7 +607,7 @@ c775ReadEvent(int id, UINT32 * data)
 
 /*******************************************************************************
 *
-* c775FlushEvent - Flush event/data from TDC. 
+* c775FlushEvent - Flush event/data from TDC.
 *
 *
 * RETURNS: Number of Data words read from the TDC.
@@ -705,7 +707,7 @@ c775FlushEvent(int id, int fflag)
 
 /*******************************************************************************
 *
-* c775ReadBlock - Read Block of events from TDC to specified address. 
+* c775ReadBlock - Read Block of events from TDC to specified address.
 *
 * INPUTS:    id     - module id of TDC to access
 *            data   - address of data destination
@@ -735,8 +737,8 @@ c775ReadBlock(int id, volatile UINT32 * data, int nwrds)
 
   C775LOCK;
 #ifdef VXWORKSPPC
-  /* Don't bother checking if there is a valid event. Just blast data out of the 
-     FIFO Valid or Invalid 
+  /* Don't bother checking if there is a valid event. Just blast data out of the
+     FIFO Valid or Invalid
      Also assume that the Universe DMA programming is setup. */
 
   retVal =
@@ -758,8 +760,8 @@ c775ReadBlock(int id, volatile UINT32 * data, int nwrds)
 
 #else
   /* Linux readout with jvme library */
-  vmeAdr = (UINT32) (c775p[id]->data) - c775MemOffset;
-  retVal = vmeDmaSend((UINT32) data, vmeAdr, (nwrds << 2));
+  vmeAdr = (unsigned long) c775p[id]->data - c775MemOffset;
+  retVal = vmeDmaSend((unsigned long)data, vmeAdr, (nwrds << 2));
   if (retVal < 0)
     {
       logMsg("c775ReadBlock: ERROR in DMA transfer Initialization 0x%x\n",
@@ -912,7 +914,7 @@ c775Int(void)
 * c775IntConnect - connect a user routine to the c775 TDC interrupt
 *
 * This routine specifies the user interrupt routine to be called at each
-* interrupt. 
+* interrupt.
 *
 * RETURNS: OK, or ERROR if Interrupts are enabled
 */
@@ -1002,7 +1004,7 @@ c775IntConnect(VOIDFUNCPTR routine, int arg, UINT16 level, UINT16 vector)
 * c775IntEnable - Enable interrupts from specified TDC
 *
 * Enables interrupts for a specified TDC.
-* 
+*
 * RETURNS OK or ERROR if TDC is not available or parameter is out of range
 */
 
@@ -1100,7 +1102,7 @@ c775IntDisable(int iflag)
 
 /*******************************************************************************
 *
-* c775IntResume - Re-enable interrupts from previously 
+* c775IntResume - Re-enable interrupts from previously
 *                 intitialized TDC
 *
 * RETURNS: OK, or ERROR if not initialized
@@ -1564,4 +1566,3 @@ c775Reset(int id)
   c775EvtReadCnt[id] = -1;
   c775EventCount[id] = 0;
 }
-
