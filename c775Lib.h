@@ -1,10 +1,10 @@
 /******************************************************************************
 *
 *  c775Lib.h  -  Driver library header file for readout of a C.A.E.N. multiple
-*                Model 775 TDCs using a VxWorks 5.2 or later based single board 
+*                Model 775 TDCs using a VxWorks 5.2 or later based single board
 *                computer.
 *
-*  Author: David Abbott 
+*  Author: David Abbott
 *          Jefferson Lab Data Acquisition Group
 *          March 2002
 *
@@ -66,7 +66,7 @@ typedef struct
 
 typedef struct
 {
-  /* 0x8000          */ unsigned short blank0[0x26>>2];
+  /* 0x8000          */ unsigned short blank0[0x26>>1];
   /* 0x8026 */ volatile unsigned short OUI_3;
   /* 0x8028          */ unsigned short blank1;
   /* 0x802A */ volatile unsigned short OUI_2;
