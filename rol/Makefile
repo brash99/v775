@@ -16,8 +16,8 @@ VMEROL			= vme_list.so c775_linux_list.so
 # Add shared library dependencies here.  (jvme, ti, are already included)
 ROLLIBS			= -lc775
 
-LINUXVME_LIB	?= ${CODA}/extensions/linuxvme/libs
-LINUXVME_INC	?= ${CODA}/extensions/linuxvme/include
+LINUXVME_LIB	?= ${CODA}/linuxvme/lib
+LINUXVME_INC	?= ${CODA}/linuxvme/include
 
 # DEFs for compiling primary readout lists
 CC			= gcc
@@ -70,7 +70,7 @@ event_list.so: event_list.c
 	@echo "Building $@ from $<"
 	@echo
 	$(CC) -fpic -shared  $(CFLAGS) $(INCS) $(LIBS) \
-		-DINIT_NAME=$(@:.so=__init) -o $@ $<
+		-DINIT_NAME=$(@:.so=__init) -DINIT_NAME_POLL=$(@:.so=__poll) -o $@ $<
 
 clean distclean:
 	@rm -f  $(VMEROL) $(SOBJS) $(CFILES) *~ $(DEPS)

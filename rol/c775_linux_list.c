@@ -56,7 +56,8 @@ rocPrestart()
 /*   c775EnableBerr(TDC_ID); /\* for 32bit block transfer *\/ */
   c775CommonStop(TDC_ID);
 
-  c775Status(TDC_ID,0,0);
+  //c775Status(TDC_ID,0,0);
+  c775Status(TDC_ID);
   
 
   printf("rocPrestart: User Prestart Executed\n");
@@ -77,7 +78,8 @@ rocEnd()
 {
   int status, count;
   
-  c775Status(TDC_ID,0,0);
+  //c775Status(TDC_ID,0,0);
+  c775Status(TDC_ID);
 
   c775Disable(TDC_ID);
 

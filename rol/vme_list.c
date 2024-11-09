@@ -32,7 +32,7 @@ unsigned int BLOCKLEVEL=1;
 int tsCrate=0;
 #else
 #ifdef TI_MASTER
-int tsCrate=1;
+/* int tsCrate=1; */
 #endif
 #endif
 
